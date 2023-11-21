@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 双相机定时同步采集。默认每3秒保存一组，q或Ctrl+C退出。
+# 双相机定时同步采集。默认每2秒保存一组，q或Ctrl+C退出。
 
 ARCH=$(uname -m)
 
@@ -87,7 +87,7 @@ if [ -z "${IR_CAMERA_COM:-}" ]; then
     fi
 fi
 
-export AUTO_CAPTURE_INTERVAL_SECONDS="${AUTO_CAPTURE_INTERVAL_SECONDS:-3}"
+export AUTO_CAPTURE_INTERVAL_SECONDS="${AUTO_CAPTURE_INTERVAL_SECONDS:-2}"
 SESSION_ID="${CAPTURE_SESSION_ID:-session_$(date +%Y%m%d_%H%M%S)}"
 export CAPTURE_SAVE_DIR="${CAPTURE_SAVE_DIR:-/home/topeet/Camera_project/captures/sessions/${SESSION_ID}/sync_pairs}"
 

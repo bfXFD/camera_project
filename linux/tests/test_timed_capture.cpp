@@ -71,7 +71,7 @@ CaptureSceneMode getUserSceneChoice() {
 }
 
 int getCaptureIntervalSeconds() {
-    constexpr int defaultInterval = 3;
+    constexpr int defaultInterval = 2;
     const char* value = std::getenv("AUTO_CAPTURE_INTERVAL_SECONDS");
     if (value == nullptr || value[0] == '\0') {
         return defaultInterval;
@@ -85,7 +85,7 @@ int getCaptureIntervalSeconds() {
     } catch (...) {
     }
 
-    std::cerr << "警告: AUTO_CAPTURE_INTERVAL_SECONDS 必须是正整数，使用默认值 3 秒。" << std::endl;
+    std::cerr << "警告: AUTO_CAPTURE_INTERVAL_SECONDS 必须是正整数，使用默认值 2 秒。" << std::endl;
     return defaultInterval;
 }
 
