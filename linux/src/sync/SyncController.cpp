@@ -9,6 +9,7 @@
 #include <cstdlib>
 
 static const uint64_t SYNC_THRESHOLD_NS = 5e6; // 5 ms
+static const size_t MAX_PENDING_FRAMES_PER_CAMERA = 4;
 
 SyncController::SyncController(CameraBase* camA, CameraBase* camB,
                                CaptureSceneMode sceneMode, int startIndex, int maxPairsToSave)
@@ -126,6 +127,11 @@ void SyncController::grabLoop(CameraBase* cam, std::queue<Frame>& q, std::mutex&
             if (cam->grab(f)) {
                 std::lock_guard<std::mutex> lk(mtx);
                 q.push(std::move(f));
+                while (q.size() > MAX_PENDING_FRAMES_PER_CAMERA) {
+                    q.pop();
+                    std::lock_guard<std::mutex> statsLock(statsMutex);
+                    stats.droppedFrames++;
+                }
             } else {
                 // 如果grab失败，稍微等待一下
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
