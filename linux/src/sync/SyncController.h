@@ -4,6 +4,7 @@
 #include <thread>
 #include <atomic>
 #include <string>
+#include <condition_variable>
 #include "camera/CameraBase.h"
 
 // 采集模式枚举
@@ -16,6 +17,8 @@ class SyncController {
 public:
     struct SyncStats {
         int matchedPairs = 0;      // 匹配成功的帧对数
+        int savedPairs = 0;        // writer实际完成落盘的帧对数
+        int writerDroppedPairs = 0;// writer队列溢出丢弃的帧对数
         int droppedFrames = 0;     // 丢弃的帧数
         double avgTimeDiff = 0.0;  // 平均时间戳差异（毫秒）
         double maxTimeDiff = 0.0;  // 最大时间戳差异（毫秒）
@@ -39,6 +42,14 @@ public:
 private:
     void grabLoop(CameraBase* cam, std::queue<Frame>& q, std::mutex& mtx);
     void syncLoop();
+    void writerLoop();
+
+    struct PendingPair {
+        int index = 0;
+        Frame vis;
+        Frame ir;
+        double pairDeltaMs = 0.0;
+    };
 
     CameraBase* cam1;
     CameraBase* cam2;
@@ -47,7 +58,11 @@ private:
     std::mutex mtx1, mtx2;
 
     std::atomic<bool> running{false};
-    std::thread t1, t2, tSync;
+    std::thread t1, t2, tSync, tWriter;
+    std::queue<PendingPair> writerQueue;
+    std::mutex writerMutex;
+    std::condition_variable writerCv;
+    bool writerStopping = false;
     
     // 同步帧对计数器
     int syncPairCount = 0;

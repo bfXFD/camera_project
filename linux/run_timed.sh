@@ -88,7 +88,8 @@ if [ -z "${IR_CAMERA_COM:-}" ]; then
 fi
 
 export AUTO_CAPTURE_INTERVAL_SECONDS="${AUTO_CAPTURE_INTERVAL_SECONDS:-3}"
-export CAPTURE_SAVE_DIR="${CAPTURE_SAVE_DIR:-captured_images/sync_pairs}"
+SESSION_ID="${CAPTURE_SESSION_ID:-session_$(date +%Y%m%d_%H%M%S)}"
+export CAPTURE_SAVE_DIR="${CAPTURE_SAVE_DIR:-/home/topeet/Camera_project/captures/sessions/${SESSION_ID}/sync_pairs}"
 
 if [ ! -x "${SCRIPT_DIR}/build/test_timed_capture" ]; then
     echo "未找到定时采集程序，请先运行 ${SCRIPT_DIR}/build.sh"

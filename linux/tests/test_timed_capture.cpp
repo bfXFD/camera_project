@@ -207,8 +207,8 @@ int main() {
         }
 
         const auto stats = controller.getStats();
-        if (stats.matchedPairs > reportedPairs) {
-            reportedPairs = stats.matchedPairs;
+        if (stats.savedPairs > reportedPairs) {
+            reportedPairs = stats.savedPairs;
             std::cout << "[保存完成] 第 " << reportedPairs
                       << " 组，平均时间差 " << stats.avgTimeDiff << " ms" << std::endl;
         }
@@ -221,8 +221,10 @@ int main() {
     closeCameras();
 
     const auto finalStats = controller.getStats();
-    std::cout << "定时采集结束，共保存 " << finalStats.matchedPairs << " 组同步图像。" << std::endl;
+    std::cout << "定时采集结束，共匹配 " << finalStats.matchedPairs
+              << " 组，实际保存 " << finalStats.savedPairs << " 组同步图像。" << std::endl;
     std::cout << "丢弃帧数: " << finalStats.droppedFrames << std::endl;
+    std::cout << "Writer队列丢弃帧对数: " << finalStats.writerDroppedPairs << std::endl;
     if (finalStats.matchedPairs > 0) {
         std::cout << "平均同步时间差: " << finalStats.avgTimeDiff << " ms" << std::endl;
     }

@@ -10,6 +10,7 @@
 
 static const uint64_t SYNC_THRESHOLD_NS = 5e6; // 5 ms
 static const size_t MAX_PENDING_FRAMES_PER_CAMERA = 4;
+static const size_t MAX_PENDING_PAIRS_TO_WRITE = 2;
 
 SyncController::SyncController(CameraBase* camA, CameraBase* camB,
                                CaptureSceneMode sceneMode, int startIndex, int maxPairsToSave)
@@ -89,6 +90,8 @@ int SyncController::scanMaxIndex(const std::string& directory, const std::string
 
 void SyncController::start() {
     running = true;
+    writerStopping = false;
+    tWriter = std::thread(&SyncController::writerLoop, this);
     t1 = std::thread(&SyncController::grabLoop, this, cam1, std::ref(q1), std::ref(mtx1));
     t2 = std::thread(&SyncController::grabLoop, this, cam2, std::ref(q2), std::ref(mtx2));
     tSync = std::thread(&SyncController::syncLoop, this);
@@ -99,6 +102,12 @@ void SyncController::stop() {
     t1.join();
     t2.join();
     tSync.join();
+    {
+        std::lock_guard<std::mutex> lock(writerMutex);
+        writerStopping = true;
+    }
+    writerCv.notify_all();
+    tWriter.join();
 }
 
 bool SyncController::triggerBoth() {
@@ -228,77 +237,21 @@ void SyncController::syncLoop() {
                     stats.minTimeDiff = std::min(stats.minTimeDiff, dtMs);
                 }
                 
-                // 文件名格式: sync_pair_<编号>_<场景模式>_<相机类型>.png
-                // 例如: sync_pair_1_light_vis.png, sync_pair_1_light_ir.png
-                
-                // 保存VIS相机图像（假设cam1是VIS相机，3通道BGR）
-                std::string visFilename = saveDir + "/sync_pair_" +
-                                         std::to_string(syncPairCount) + "_" +
-                                         sceneModeStr + "_vis.png";
-                if (f1.channels == 3) {
-                    ImageSaver::saveBGR(visFilename, f1);
-
-                    const char* channelDiagnostic = std::getenv("VIS_CHANNEL_DIAGNOSTIC");
-                    if (channelDiagnostic != nullptr && std::string(channelDiagnostic) == "1") {
-                        struct ChannelPermutation {
-                            int r;
-                            int g;
-                            int b;
-                            const char* label;
-                        };
-                        const ChannelPermutation permutations[] = {
-                            {0, 1, 2, "C0C1C2"},
-                            {0, 2, 1, "C0C2C1"},
-                            {1, 0, 2, "C1C0C2"},
-                            {1, 2, 0, "C1C2C0"},
-                            {2, 0, 1, "C2C0C1"},
-                            {2, 1, 0, "C2C1C0"},
-                        };
-
-                        for (const auto& permutation : permutations) {
-                            const std::string diagnosticFilename = saveDir + "/sync_pair_" +
-                                std::to_string(syncPairCount) + "_" + sceneModeStr +
-                                "_vis_perm_" + permutation.label + ".png";
-                            ImageSaver::saveChannelPermutation(diagnosticFilename, f1,
-                                                               permutation.r,
-                                                               permutation.g,
-                                                               permutation.b);
-                        }
-                        std::cout << "[Channel Diagnostic] 已保存同一VIS帧的6种通道排列" << std::endl;
+                PendingPair pair;
+                pair.index = syncPairCount;
+                pair.vis = std::move(f1);
+                pair.ir = std::move(f2);
+                pair.pairDeltaMs = dtMs;
+                {
+                    std::lock_guard<std::mutex> writerLock(writerMutex);
+                    if (writerQueue.size() >= MAX_PENDING_PAIRS_TO_WRITE) {
+                        writerQueue.pop();
+                        std::lock_guard<std::mutex> statsLock(statsMutex);
+                        stats.writerDroppedPairs++;
                     }
-                } else {
-                    ImageSaver::saveGray(visFilename, f1);
+                    writerQueue.push(std::move(pair));
                 }
-                
-                // 保存IR相机图像（假设cam2是IR相机，1通道灰度）
-                std::string irFilename = saveDir + "/sync_pair_" +
-                                        std::to_string(syncPairCount) + "_" +
-                                        sceneModeStr + "_ir.png";
-                if (f2.channels == 1) {
-                    ImageSaver::saveGray(irFilename, f2);
-                } else {
-                    ImageSaver::saveBGR(irFilename, f2);
-                }
-                
-                // 记录日志：时间戳差异（转换为毫秒）
-                std::ofstream logFile(saveDir + "/sync.log", std::ios::app);
-                logFile << "Pair " << syncPairCount << " (" << sceneModeStr << "): "
-                        << "VIS_host_entry_ns=" << f1.timestamp << ", "
-                        << "IR_host_entry_ns=" << f2.timestamp << ", "
-                        << "host_pair_delta_ms=" << dtMs << ", "
-                        << "VIS_host_processing_ms="
-                        << (f1.hostCallbackEndTimestampNs >= f1.timestamp
-                            ? (f1.hostCallbackEndTimestampNs - f1.timestamp) / 1e6
-                            : 0.0) << ", "
-                        << "IR_host_processing_ms="
-                        << (f2.hostCallbackEndTimestampNs >= f2.timestamp
-                            ? (f2.hostCallbackEndTimestampNs - f2.timestamp) / 1e6
-                            : 0.0) << ", "
-                        << "VIS_device_timestamp_us=" << f1.deviceTimestampUs << ", "
-                        << "VIS_exposure_us=" << f1.exposureTimeUs << "\n";
-                logFile.close();
-                
-                // 静默保存，不输出到控制台
+                writerCv.notify_one();
             } else {
                 // 时间戳差异过大，丢弃较旧的帧
                 {
@@ -326,5 +279,59 @@ void SyncController::syncLoop() {
         } catch (...) {
             std::cerr << "[ERROR] Unknown exception in syncLoop" << std::endl;
         }
+    }
+}
+
+void SyncController::writerLoop() {
+    while (true) {
+        PendingPair pair;
+        {
+            std::unique_lock<std::mutex> lock(writerMutex);
+            writerCv.wait(lock, [this] { return writerStopping || !writerQueue.empty(); });
+            if (writerQueue.empty()) {
+                if (writerStopping) {
+                    break;
+                }
+                continue;
+            }
+            pair = std::move(writerQueue.front());
+            writerQueue.pop();
+        }
+
+        const std::string prefix = saveDir + "/sync_pair_" +
+            std::to_string(pair.index) + "_" + sceneModeStr;
+        const std::string visFilename = prefix + "_vis.png";
+        const std::string irFilename = prefix + "_ir.png";
+        const bool visSaved = pair.vis.channels == 3
+            ? ImageSaver::saveBGR(visFilename, pair.vis)
+            : ImageSaver::saveGray(visFilename, pair.vis);
+        const bool irSaved = pair.ir.channels == 1
+            ? ImageSaver::saveGray(irFilename, pair.ir)
+            : ImageSaver::saveBGR(irFilename, pair.ir);
+
+        if (!visSaved || !irSaved) {
+            std::cerr << "[Writer] 保存同步帧对失败: " << pair.index << std::endl;
+            continue;
+        }
+
+        std::ofstream logFile(saveDir + "/sync.log", std::ios::app);
+        logFile << "Pair " << pair.index << " (" << sceneModeStr << "): "
+                << "VIS_host_entry_ns=" << pair.vis.timestamp << ", "
+                << "IR_host_entry_ns=" << pair.ir.timestamp << ", "
+                << "host_pair_delta_ms=" << pair.pairDeltaMs << ", "
+                << "VIS_host_processing_ms="
+                << (pair.vis.hostCallbackEndTimestampNs >= pair.vis.timestamp
+                    ? (pair.vis.hostCallbackEndTimestampNs - pair.vis.timestamp) / 1e6
+                    : 0.0) << ", "
+                << "IR_host_processing_ms="
+                << (pair.ir.hostCallbackEndTimestampNs >= pair.ir.timestamp
+                    ? (pair.ir.hostCallbackEndTimestampNs - pair.ir.timestamp) / 1e6
+                    : 0.0) << ", "
+                << "VIS_device_timestamp_us=" << pair.vis.deviceTimestampUs << ", "
+                << "VIS_exposure_us=" << pair.vis.exposureTimeUs << "\n";
+        logFile.close();
+
+        std::lock_guard<std::mutex> statsLock(statsMutex);
+        stats.savedPairs++;
     }
 }
