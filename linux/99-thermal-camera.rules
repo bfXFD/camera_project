@@ -1,0 +1,5 @@
+# Thermal camera raw USB access for the vendor SDK.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04b4", ATTR{idProduct}=="7510", GROUP:="plugdev", MODE:="0660", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# Prevent ModemManager from probing the camera's CDC ACM control interface.
+SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="7510", GROUP:="dialout", MODE:="0660", ENV{ID_MM_DEVICE_IGNORE}="1"

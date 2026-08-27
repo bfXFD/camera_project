@@ -1,0 +1,30 @@
+# Build outputs
+linux/build/
+CMakeFiles/
+cmake-build-*/
+*.o
+*.a
+
+# Runtime logs and state
+*.log
+*.going
+log/
+
+# Captured datasets
+captured_images/
+sync_pairs/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor and OS files
+.vscode/
+.idea/
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.swp
