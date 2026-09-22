@@ -92,5 +92,13 @@ if [ -f "test_sync_1_sample" ]; then
     echo "Built: test_sync_1_sample (dual camera sync)"
 fi
 
+if [ -f "test_keyboard_capture" ]; then
+    echo "Built: test_keyboard_capture (persistent keyboard capture)"
+fi
+
+if [ -f "test_timed_capture" ]; then
+    echo "Built: test_timed_capture (automatic timed capture)"
+fi
+
 echo ""
 echo "To run the tests, use: ./run.sh"

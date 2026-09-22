@@ -121,6 +121,31 @@ set_target_properties(test_keyboard_capture PROPERTIES
     INSTALL_RPATH "${MVSDK_ROOT}/lib/${MVSDK_LIB_ARCH}:${T1280_ROOT}/libs"
 )
 
+# ===== 定时自动同步采集程序 =====
+add_executable(test_timed_capture
+    tests/test_timed_capture.cpp
+    ${CAMERA_SRC}
+    ${SYNC_SRC}
+    ${STORAGE_SRC}
+)
+
+target_include_directories(test_timed_capture PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+    ${MVSDK_ROOT}/include
+    ${T1280_ROOT}/include
+)
+
+target_link_libraries(test_timed_capture PRIVATE
+    ${MVSDK_LIB_PATH}
+    ${T1280_LIB_PATH}
+    Threads::Threads
+)
+
+set_target_properties(test_timed_capture PROPERTIES
+    BUILD_RPATH "${MVSDK_ROOT}/lib/${MVSDK_LIB_ARCH}:${T1280_ROOT}/libs"
+    INSTALL_RPATH "${MVSDK_ROOT}/lib/${MVSDK_LIB_ARCH}:${T1280_ROOT}/libs"
+)
+
 message(STATUS "=== Linux Build Configuration ===")
 message(STATUS "Architecture: ${ARCH}")
 message(STATUS "MindVision SDK: ${MVSDK_ROOT}")
@@ -129,3 +154,4 @@ message(STATUS "T1280 SDK: ${T1280_ROOT}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Building: test_sync_1_sample (dual camera sync)")
 message(STATUS "Building: test_keyboard_capture (persistent keyboard capture)")
+message(STATUS "Building: test_timed_capture (automatic timed capture)")

@@ -1,2 +1,1 @@
-# udev rules file for usb camera, ubuntu20
-SUBSYSTEM=="usb", ATTR{idVendor}=="f622", MODE="666", GROUP="mvusb_dev"
+# Kept for SDK compatibility. Device access is configured by 88-mvusb.rules.
