@@ -202,6 +202,9 @@ bool IRCamera::grab(Frame& frame) {
 }
 
 void IRCamera::FrameCallback(IRC_USB_HANDLE handle, IRC_USB_VIDEO_INFO_CB* videoInfo, void* userPtr) {
+    const uint64_t callbackEntryNs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
     // 将userPtr转换为IRCamera*指针
     IRCamera* camera = static_cast<IRCamera*>(userPtr);
     
@@ -219,6 +222,7 @@ void IRCamera::FrameCallback(IRC_USB_HANDLE handle, IRC_USB_VIDEO_INFO_CB* video
     frame.width = videoInfo->width;
     frame.height = videoInfo->height;
     frame.channels = 1;  // 输出灰度图像
+    frame.timestamp = callbackEntryNs;
     
     // 根据帧格式计算数据大小并提取亮度数据
     int pixelCount = videoInfo->width * videoInfo->height;
@@ -249,8 +253,9 @@ void IRCamera::FrameCallback(IRC_USB_HANDLE handle, IRC_USB_VIDEO_INFO_CB* video
         frame.data.assign((uint8_t*)videoInfo->dataBuf, (uint8_t*)videoInfo->dataBuf + pixelCount);
     }
     
-    // 记录时间戳
-    frame.timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    frame.hostCallbackEndTimestampNs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
     
     // 使用互斥锁保护队列操作
     std::lock_guard<std::mutex> lock(camera->queueMutex);

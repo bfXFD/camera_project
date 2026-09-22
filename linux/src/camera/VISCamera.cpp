@@ -173,12 +173,21 @@ void VISCamera::FrameCallback(
     void* pContext)
 {
     VISCamera* camera = static_cast<VISCamera*>(pContext);
+    const uint64_t callbackEntryNs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
     
     try {
         Frame frame;
         frame.width = pFrameHead->iWidth;
         frame.height = pFrameHead->iHeight;
         frame.channels = 3;
+        frame.timestamp = callbackEntryNs;
+        // tSdkFrameHead::uiTimeStamp uses 0.1 ms units.
+        frame.deviceTimestampUs = static_cast<uint64_t>(pFrameHead->uiTimeStamp) * 100;
+        frame.hasDeviceTimestamp = pFrameHead->uiTimeStamp != 0;
+        frame.exposureTimeUs = static_cast<double>(pFrameHead->uiExpTime);
+        frame.hasExposureTime = frame.exposureTimeUs > 0.0;
         
         // 分配临时缓冲区用于处理后的图像
         int dataSize = frame.width * frame.height * frame.channels;
@@ -194,8 +203,9 @@ void VISCamera::FrameCallback(
         // 复制处理后的图像数据
         frame.data = std::move(processedBuffer);
         
-        // 记录时间戳
-        frame.timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        frame.hostCallbackEndTimestampNs = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count());
         
         // 线程安全地将帧加入队列
         std::lock_guard<std::mutex> lock(camera->queueMutex);

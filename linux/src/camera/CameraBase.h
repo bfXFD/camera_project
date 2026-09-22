@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <cstdint>
+#include <string>
 
 enum class CaptureMode {
     Polling,
@@ -13,7 +14,16 @@ struct Frame {
     int height = 0;
     int channels = 0;
     std::vector<uint8_t> data;
+    // Shared host monotonic clock used for RGB/IR pairing.
     uint64_t timestamp = 0;
+    uint64_t hostCallbackEndTimestampNs = 0;
+    uint64_t deviceTimestampUs = 0;
+    uint64_t frameId = 0;
+    double exposureTimeUs = 0.0;
+    bool hasDeviceTimestamp = false;
+    bool hasFrameId = false;
+    bool hasExposureTime = false;
+    std::string timestampSource = "host_callback_entry_monotonic";
 };
 
 class CameraBase {

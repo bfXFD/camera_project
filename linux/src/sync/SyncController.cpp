@@ -277,9 +277,19 @@ void SyncController::syncLoop() {
                 // 记录日志：时间戳差异（转换为毫秒）
                 std::ofstream logFile(saveDir + "/sync.log", std::ios::app);
                 logFile << "Pair " << syncPairCount << " (" << sceneModeStr << "): "
-                       << "VIS_ts=" << f1.timestamp << ", "
-                       << "IR_ts=" << f2.timestamp << ", "
-                       << "dt=" << dtMs << " ms\n";
+                        << "VIS_host_entry_ns=" << f1.timestamp << ", "
+                        << "IR_host_entry_ns=" << f2.timestamp << ", "
+                        << "host_pair_delta_ms=" << dtMs << ", "
+                        << "VIS_host_processing_ms="
+                        << (f1.hostCallbackEndTimestampNs >= f1.timestamp
+                            ? (f1.hostCallbackEndTimestampNs - f1.timestamp) / 1e6
+                            : 0.0) << ", "
+                        << "IR_host_processing_ms="
+                        << (f2.hostCallbackEndTimestampNs >= f2.timestamp
+                            ? (f2.hostCallbackEndTimestampNs - f2.timestamp) / 1e6
+                            : 0.0) << ", "
+                        << "VIS_device_timestamp_us=" << f1.deviceTimestampUs << ", "
+                        << "VIS_exposure_us=" << f1.exposureTimeUs << "\n";
                 logFile.close();
                 
                 // 静默保存，不输出到控制台
